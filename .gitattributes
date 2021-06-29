@@ -1,2 +1,89 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+#include <QTRSensors.h>
+#define KP 0.5 // 0.2
+#define KD 4   // 0
+#define Ki 0.02 // 0.0015
+#define M1_MAX_SPEED 130
+#define M2_MAX_SPEED 130
+#define M1_DEFAULT_SPEED 80
+#define M2_DEFAULT_SPEED 80
+#define MIDDLE_SENSOR 4, 5
+#define NUM_SENSORS    6   // number of sensors used
+#define TIMEOUT       2500  // waits for 2500 us for sensor outputs to go low
+#define EMITTER_PIN   2     // emitter is controlled by digital pin 2
+#define DEBUG 1 // set to 1 if serial debug output needed
+
+#define rightMotor1 10
+#define rightMotor2 A1
+#define rightMotorPWM 10
+#define leftMotor1 11
+#define leftMotor2 A2
+#define leftMotorPWM 11
+#define motorPower 12
+
+QTRSensorsRC qtrrc((unsigned char[]) {3,4,5,6,7,8} ,NUM_SENSORS, TIMEOUT, EMITTER_PIN);
+unsigned int sensorValues[NUM_SENSORS];
+void setup()
+{
+  pinMode(rightMotor1, OUTPUT);
+  pinMode(rightMotor2, OUTPUT);
+  pinMode(rightMotorPWM, OUTPUT);
+  pinMode(leftMotor1, OUTPUT);
+  pinMode(leftMotor2, OUTPUT);
+  pinMode(leftMotorPWM, OUTPUT);
+  pinMode(motorPower, OUTPUT);
+  pinMode(13, OUTPUT);
+  digitalWrite(13, HIGH);    // porniți LED-ul Arduino pentru a indica faptul că suntem în modul de calibrare
+  manual_calibration(); 
+  digitalWrite(13, LOW);     // opriți LED-ul Arduino pentru a indica că am terminat cu calibrarea
+}
+int lastError = 0;
+int  last_proportional = 0;
+int integral = 0;
+void loop()
+{
+  unsigned int sensors[6];
+  int position = qtrrc.readLine(sensors);
+  int error = position - 2500;
+  int motorSpeed = KP * error + KD * (error - lastError);
+  lastError = error;
+  int rightMotorSpeed = M2_DEFAULT_SPEED + motorSpeed;
+  int leftMotorSpeed = M1_DEFAULT_SPEED - motorSpeed;
+  if (rightMotorSpeed > M1_MAX_SPEED ) rightMotorSpeed = M1_MAX_SPEED; // limitează viteza maximă
+  if (leftMotorSpeed > M2_MAX_SPEED ) leftMotorSpeed = M2_MAX_SPEED; // limitează viteza maximă
+  if (rightMotorSpeed < 0) rightMotorSpeed = 0; // mențineți motorul peste 0
+  if (leftMotorSpeed < 0) leftMotorSpeed = 0; // mențineți viteza motorului peste 0
+   {
+  digitalWrite(motorPower, HIGH);
+  analogWrite(rightMotor1, rightMotorSpeed);
+  digitalWrite(rightMotor2, LOW);
+  analogWrite(rightMotorPWM, rightMotorSpeed);
+  digitalWrite(motorPower, HIGH);
+  analogWrite(leftMotor1, leftMotorSpeed);
+   digitalWrite(leftMotor2, LOW);
+  analogWrite(leftMotorPWM, leftMotorSpeed);
+}
+}
+void manual_calibration() {
+  int i;
+  for (i = 0; i < 250; i++)  // the calibration will take a few seconds
+  {
+    qtrrc.calibrate(QTR_EMITTERS_ON);
+    delay(20);
+  }
+  if (DEBUG) { // if true, generate sensor dats via serial output
+    Serial.begin(9600);
+    for (int i = 0; i < NUM_SENSORS; i++)
+    {
+      Serial.print(qtrrc.calibratedMinimumOn[i]);
+      Serial.print(' ');
+    }
+    Serial.println();
+    for (int i = 0; i < NUM_SENSORS; i++)
+{
+  Serial.print(qtrrc.calibratedMaximumOn[i]);
+  Serial.print(' ');
+}
+Serial.println();
+Serial.println();
+  }
+}
